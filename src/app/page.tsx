@@ -21,17 +21,17 @@ function App() {
         setLoading(false)
       }
     } catch (error) {
-      console.error("Erro:", error);
-      setResponse("Ocorreu um erro ao consultar a API.");
+      console.error("Error:", error);
+      setResponse("An error ocurred while calling the API.");
     }
   };
 
   return (
     <div className="flex y-5">
       <div className="m-auto w-1/2 px-4">
-        <h1 className="text-gray-100 w-full my-5">Converse Com o Gemini</h1>
+        <h1 className="text-gray-100 w-full my-5">Talk Com o Gemini</h1>
         <div className="my-5">
-          <h3 className="text-gray-100">Resposta:</h3>
+          <h3 className="text-gray-100">Answer:</h3>
           {loading ? <SkeletonLoading /> : <Markdown className="text-gray-100">{response}</Markdown>}
         </div>
         <form onSubmit={handleSubmit}>
@@ -39,7 +39,7 @@ function App() {
             <Textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Digite seu prompt"
+              placeholder="Prompt it"
               className="text-white"
             />
             <Button variant="secondary" type="submit">
