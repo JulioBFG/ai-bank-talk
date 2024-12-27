@@ -43,7 +43,7 @@ function App() {
               className="text-white"
             />
             <Button variant="secondary" type="submit">
-              Enviar
+              Send
             </Button>
           </div>
         </form>
