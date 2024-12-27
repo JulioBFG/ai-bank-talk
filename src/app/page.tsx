@@ -29,7 +29,7 @@ function App() {
   return (
     <div className="flex y-5">
       <div className="m-auto w-1/2 px-4">
-        <h1 className="text-gray-100 w-full my-5">Talk Com o Gemini</h1>
+        <h1 className="text-gray-100 w-full my-5">Talk With Gemini</h1>
         <div className="my-5">
           <h3 className="text-gray-100">Answer:</h3>
           {loading ? <SkeletonLoading /> : <Markdown className="text-gray-100">{response}</Markdown>}
