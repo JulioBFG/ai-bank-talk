@@ -6,6 +6,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <title>AI Talk</title>
+      </head>
       <body>{children}</body>
     </html>
   )
