@@ -1,13 +1,13 @@
-import app from './app';
-import { connectToDatabase } from './config/db';
-import config from './config/config'
+import { supabase } from './config/supabaseClient';
 
-const port = config.port || 3000;
 
-connectToDatabase().then(() => {
-    app.listen(port, () => {
-        console.log(`Servidor rodando na porta ${port}`);
-    });
-}).catch((error) => {
-    console.error("Erro ao conectar ao banco de dados:", error);
-});
+const port = 3000;
+
+export const test = async () => {
+  const { data, error } = await supabase.from('users').select('*');
+  if (error) {
+    console.log(error);
+  }
+}
+
+test();
