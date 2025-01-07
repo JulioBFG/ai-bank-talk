@@ -1,11 +1,7 @@
+import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js'
-import config from './config';
+dotenv.config();
 
-const supabaseUrl = config.supabaseUrl || process.env.SUPABASE_URL; // Obtem a URL do ambiente ou config
-const supabaseAnonKey = config.supabaseAnonKey || process.env.SUPABASE_ANON_KEY; // Obtem a chave anon do ambiente ou config
-
-if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('As variáveis SUPABASE_URL e SUPABASE_ANON_KEY devem estar definidas.');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseUrl = process.env.SUPABASE_URL ?? '';
+const supabaseKey = process.env.SUPABASE_KEY ?? '';
+export const connectToDatabase = createClient(supabaseUrl, supabaseKey)
