@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { chatService } from '../services/chat.service';
-import { User } from '../models/user.model'; // Importe o tipo User
+import { User } from '../models/user.model';
 
 export const sendMessage = async (req: Request, res: Response, next: NextFunction) => {
   try {
