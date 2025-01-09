@@ -1,4 +1,4 @@
-"use client"
+"use client";
 import React, { useState, FormEvent } from "react";
 import { getGeminiResponse } from "@/api/api";
 import ChatForm from "@/components/ChatForm/ChatForm";
@@ -19,7 +19,7 @@ function App() {
       const responseText = await getGeminiResponse(prompt);
       if (responseText !== null && responseText !== undefined) {
         setQuestions([...questions, prompt]);
-        setResponses([...responses, responseText?.response ?? '']);
+        setResponses([...responses, responseText?.response ?? ""]);
         setPrompt("");
         setLoading(false);
       }
@@ -35,7 +35,11 @@ function App() {
           Talk with Sam
         </h1>
         <div className="space-y-4 p-4 overflow-y-auto max-h-[60vh]">
-          <Questions loading={loading} questions={questions} responses={responses} />
+          <Questions
+            loading={loading}
+            questions={questions}
+            responses={responses}
+          />
           <ChatForm
             handleSubmit={handleSubmit}
             loading={loading}
