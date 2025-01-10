@@ -1,10 +1,9 @@
 import { GoogleGenerativeAI, ChatSession } from "@google/generative-ai";
-import { supabase } from "./supabase";
 
 const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY ?? "";
 const GEMINI_COMMAND = process.env.NEXT_PUBLIC_GEMINI_COMMAND ?? "";
 const genAI = new GoogleGenerativeAI(API_KEY);
-console.log(supabase.auth.getUserIdentities());
+
 interface FinancialData {
   name?: string;
   cpf?: string;
@@ -22,11 +21,6 @@ interface ChatHistoryItem {
 
 type ChatHistory = ChatHistoryItem[];
 
-const sendMessage = async (chat: ChatSession, prompt: string) => {
-  const result = await chat.sendMessage(prompt);
-  return result.response?.text();
-};
-
 const addToHistory = (
   history: ChatHistory = [],
   role: string,
@@ -35,105 +29,83 @@ const addToHistory = (
   return [...history, { role, parts: [{ text }] }];
 };
 
-const convertUserDataToJSONString = (userData: FinancialData): string => {
-  return JSON.stringify(userData, null, 2);
-};
-
-async function getOrCreateUserData(userId: string): Promise<FinancialData> {
+const extractDataFromJSON = (
+  responseText: string
+): { jsonData: FinancialData | null; text: string } => {
   try {
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("financial_data")
-      .eq("id", userId)
-      .single();
+    // Expressão regular para extrair o JSON
+    const jsonRegex = /`json\s*({[\s\S\`]*?})\s*`/g;
+    const match = jsonRegex.exec(responseText);
 
-    if (userError) {
-      console.error("Erro on retrieve user data:", userError);
-      const { data, error: insertError } = await supabase
-        .from("users")
-        .insert([{ id: userId, financial_data: {} }])
-        .select("financial_data")
-        .single();
-      if (insertError) {
-        throw insertError;
+    let jsonData = null;
+    let text = responseText;
+
+    if (match && match[1]) {
+      const jsonString = match[1].trim();
+
+      try {
+        jsonData = JSON.parse(jsonString);
+        text = responseText.replace(jsonRegex, "").trim();
+      } catch (jsonError) {
+        console.error("Error on JSON:", jsonError);
       }
-      return data.financial_data;
+    } else {
+      console.warn("JSON not found.");
     }
 
-    return userData ? userData.financial_data || {} : {};
-  } catch (error) {
-    console.error("Supabase error:", error);
-    throw error;
-  }
-}
+    const cleanText = text.replace(/`/g, "");
 
-const extractDataFromJSON = (jsonString: string): FinancialData | null => {
-  try {
-    const parsedData = JSON.parse(jsonString);
-    return parsedData;
+    return { jsonData, text: cleanText };
   } catch (error) {
-    console.error("Erro ao analisar JSON:", error);
-    return null;
+    console.error("Erro inesperado:", error);
+    return { jsonData: null, text: responseText };
   }
 };
+const sendMessage = async (chat: ChatSession, prompt: string) => {
+  const result = await chat.sendMessage(prompt);
+  const { text } = extractDataFromJSON(result.response?.text() ?? "");
+  console.log(text);
+  return text;
+};
 
-async function updateUserData(userId: string, financialData: FinancialData) {
-  try {
-    const { error: updateError } = await supabase
-      .from("users")
-      .update({ financial_data: financialData })
-      .eq("id", userId);
+const updateFinancialData = (
+  context: { jsonData: FinancialData },
+  extractedData: FinancialData
+) => {
+  context.jsonData = { ...context.jsonData, ...extractedData };
 
-    if (updateError) {
-      console.error("Erro on update user data:", updateError);
-      throw updateError;
-    }
-  } catch (error) {
-    console.error("Error on Supabase:", error);
-    throw error;
+  if (extractedData.objectives && !context.jsonData.objectives) {
+    context.jsonData.objectives = [];
   }
-}
+  if (extractedData.objectives) {
+    context.jsonData.objectives = [
+      ...(context.jsonData.objectives || []),
+      ...extractedData.objectives,
+    ];
+  }
 
-export const getGeminiResponse = async (prompt: string) => {
+  return context;
+};
+
+export const getGeminiResponse = async (
+  prompt: string,
+  history: ChatHistory,
+  context: { jsonData: FinancialData },
+  financialData: FinancialData
+) => {
   try {
-    const userId = await supabase.auth
-      .getUserIdentities()
-      .then(console.log(userId));
-    let financialData = await getOrCreateUserData();
-    console.log(userId);
-
-    const context = convertUserDataToJSONString(financialData);
-
-    const promptWithContext =
-      context.length > 0 ? `${context}\n\n${prompt}` : `${prompt}\n\n`;
-    const geminiCommand = GEMINI_COMMAND + promptWithContext;
-
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-flash",
-      systemInstruction: geminiCommand,
+      systemInstruction: GEMINI_COMMAND,
     });
 
     const chat = model.startChat({ history });
 
     const response = await sendMessage(chat, prompt);
+    console.log(response);
 
     const extractedData = extractDataFromJSON(response);
-
-    if (extractedData) {
-      financialData = { ...financialData, ...extractedData };
-
-      if (extractedData.objectives && !financialData.objectives) {
-        financialData.objectives = [];
-      }
-      if (extractedData.objectives) {
-        financialData.objectives = [
-          ...(financialData.objectives || []),
-          ...extractedData.objectives,
-        ];
-      }
-
-      await updateUserData(userId, financialData);
-    }
+    console.log(extractedData);
 
     const newHistory = addToHistory(history, "user", prompt).concat(
       addToHistory([], "model", response)
@@ -142,9 +114,10 @@ export const getGeminiResponse = async (prompt: string) => {
     return {
       response,
       newHistory,
+      financialData,
     };
   } catch (error) {
     console.error("General Error:", error);
-    return { response: null, newHistory: history };
+    return { response: null, newHistory: history, context, financialData };
   }
 };
