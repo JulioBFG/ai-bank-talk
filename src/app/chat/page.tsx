@@ -1,14 +1,15 @@
 "use client";
-import React, { useState, FormEvent } from "react";
 import { getGeminiResponse } from "@/api/api";
 import ChatForm from "@/components/ChatForm/ChatForm";
 import Questions from "@/components/Questions/Questions";
+import { Message } from "@/types/message";
+import { FormEvent, useState } from "react";
 
 function App() {
   const [prompt, setPrompt] = useState("");
-  const [questions, setQuestions] = useState<string[]>([]);
-  const [responses, setResponses] = useState<string[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [chatHistory, setChatHistory] = useState<Message[]>([]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -16,16 +17,37 @@ function App() {
 
     try {
       setLoading(true);
-      const responseText = await getGeminiResponse(prompt);
-      if (responseText !== null && responseText !== undefined) {
-        setQuestions([...questions, prompt]);
-        setResponses([...responses, responseText?.response ?? ""]);
+      const { response, newHistory } = await getGeminiResponse(
+        prompt,
+        chatHistory
+      );
+
+      if (response) {
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          { role: "user", content: prompt },
+          { role: "model", content: response },
+        ]);
+
+        setChatHistory(newHistory);
         setPrompt("");
-        setLoading(false);
       }
     } catch (error) {
       console.error("Error:", error);
+    } finally {
+      setLoading(false);
     }
+  };
+  const getQuestions = () => {
+    return messages
+      .filter((message) => message.role === "user")
+      .map((message) => message.content);
+  };
+
+  const getResponses = () => {
+    return messages
+      .filter((message) => message.role === "model")
+      .map((message) => message.content);
   };
 
   return (
@@ -37,8 +59,8 @@ function App() {
         <div className="space-y-4 p-4 overflow-y-auto max-h-[60vh]">
           <Questions
             loading={loading}
-            questions={questions}
-            responses={responses}
+            questions={getQuestions()}
+            responses={getResponses()}
           />
           <ChatForm
             handleSubmit={handleSubmit}

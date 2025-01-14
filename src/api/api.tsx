@@ -1,123 +1,78 @@
-import { GoogleGenerativeAI, ChatSession } from "@google/generative-ai";
+import { Message } from "@/types/message";
+import { ChatSession, GoogleGenerativeAI } from "@google/generative-ai";
 
 const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY ?? "";
 const GEMINI_COMMAND = process.env.NEXT_PUBLIC_GEMINI_COMMAND ?? "";
 const genAI = new GoogleGenerativeAI(API_KEY);
 
-interface FinancialData {
-  name?: string;
-  cpf?: string;
-  income?: number;
-  monthlyExpenses?: {
+interface ResponseData {
+  response: string;
+  income: number;
+  monthlyExpenses: {
     [category: string]: number;
   };
-  objectives?: string[];
+  goals: string[];
 }
 
-interface ChatHistoryItem {
-  role: string;
-  parts: [{ text: string }];
-}
+const sendMessage = async (
+  chat: ChatSession,
+  prompt: string,
+  history: Message[]
+): Promise<string> => {
+  history.push({ role: "user", content: prompt });
 
-type ChatHistory = ChatHistoryItem[];
-
-const addToHistory = (
-  history: ChatHistory = [],
-  role: string,
-  text: string
-) => {
-  return [...history, { role, parts: [{ text }] }];
-};
-
-const extractDataFromJSON = (
-  responseText: string
-): { jsonData: FinancialData | null; text: string } => {
-  try {
-    // Expressão regular para extrair o JSON
-    const jsonRegex = /`json\s*({[\s\S\`]*?})\s*`/g;
-    const match = jsonRegex.exec(responseText);
-
-    let jsonData = null;
-    let text = responseText;
-
-    if (match && match[1]) {
-      const jsonString = match[1].trim();
-
-      try {
-        jsonData = JSON.parse(jsonString);
-        text = responseText.replace(jsonRegex, "").trim();
-      } catch (jsonError) {
-        console.error("Error on JSON:", jsonError);
-      }
-    } else {
-      console.warn("JSON not found.");
-    }
-
-    const cleanText = text.replace(/`/g, "");
-
-    return { jsonData, text: cleanText };
-  } catch (error) {
-    console.error("Erro inesperado:", error);
-    return { jsonData: null, text: responseText };
-  }
-};
-const sendMessage = async (chat: ChatSession, prompt: string) => {
   const result = await chat.sendMessage(prompt);
-  const { text } = extractDataFromJSON(result.response?.text() ?? "");
-  console.log(text);
-  return text;
-};
-
-const updateFinancialData = (
-  context: { jsonData: FinancialData },
-  extractedData: FinancialData
-) => {
-  context.jsonData = { ...context.jsonData, ...extractedData };
-
-  if (extractedData.objectives && !context.jsonData.objectives) {
-    context.jsonData.objectives = [];
-  }
-  if (extractedData.objectives) {
-    context.jsonData.objectives = [
-      ...(context.jsonData.objectives || []),
-      ...extractedData.objectives,
-    ];
+  const data = result.response?.text();
+  if (data === null || data === undefined) {
+    console.error("Erro: Resposta nula ou indefinida");
+    return "";
   }
 
-  return context;
+  try {
+    const parsedData: { response: string } = JSON.parse(data);
+    const response = parsedData.response;
+    history.push({ role: "model", content: response });
+    console.log(data);
+    return response;
+  } catch (error) {
+    console.error("Error on analysis:", error, data);
+    return "";
+  }
 };
 
 export const getGeminiResponse = async (
   prompt: string,
-  history: ChatHistory,
-  context: { jsonData: FinancialData },
-  financialData: FinancialData
+  history: Message[] = []
 ) => {
   try {
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash-exp",
       systemInstruction: GEMINI_COMMAND,
     });
+    const generationConfig = {
+      temperature: 1,
+      topP: 0.95,
+      topK: 40,
+      maxOutputTokens: 8192,
+      responseMimeType: "application/json",
+    };
 
-    const chat = model.startChat({ history });
+    const chat = model.startChat({
+      generationConfig,
+      history: history.map((msg) => ({
+        role: msg.role,
+        parts: msg.content,
+      })),
+    });
 
-    const response = await sendMessage(chat, prompt);
-    console.log(response);
-
-    const extractedData = extractDataFromJSON(response);
-    console.log(extractedData);
-
-    const newHistory = addToHistory(history, "user", prompt).concat(
-      addToHistory([], "model", response)
-    );
+    const response = await sendMessage(chat, prompt, history);
 
     return {
       response,
-      newHistory,
-      financialData,
+      newHistory: history,
     };
   } catch (error) {
     console.error("General Error:", error);
-    return { response: null, newHistory: history, context, financialData };
+    return { response: null, newHistory: history };
   }
 };
